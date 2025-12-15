@@ -19,7 +19,7 @@ export default function Home() {
   const [imageUrl, setImageUrl] = useState("")
   const [user, setUser] = useState<User | null>(null)
 
-  // 🔐 ログイン状態の監視
+  // 🔐 ログイン状態監視
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user)
@@ -38,38 +38,34 @@ export default function Home() {
 
   // 🐦 ツイート取得
   const fetchTweets = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("tweets")
       .select("*")
       .order("created_at", { ascending: false })
 
-    if (!error && data) {
-      setTweets(data)
-    }
+    if (data) setTweets(data)
   }
 
   useEffect(() => {
     fetchTweets()
   }, [])
 
-  // ✍️ 投稿（ユーザー名固定）
+  // ✍️ 投稿
   const postTweet = async () => {
     if (!user) {
-      alert("ログインしてから投稿してちょ！😆")
+      alert("ログインしてから投稿してちょ😆")
       return
     }
-
     if (!text.trim()) return
 
     const { error } = await supabase.from("tweets").insert({
-      user_name: user.email, // ← 完全固定🔥
+      user_name: user.email,
       content: text,
       image_url: imageUrl || null,
     })
 
     if (error) {
-      console.error(error)
-      alert("投稿失敗したでぇ💦")
+      alert("投稿失敗したで💦")
       return
     }
 
@@ -78,22 +74,25 @@ export default function Home() {
     fetchTweets()
   }
 
-  // ❤️ いいね（回数カウント）
-  const likeTweet = async (id: string, currentLikes: number) => {
-    if (!user) {
-      alert("ログインしてからいいねしてちょ❤️")
-      return
-    }
+  // ❤️ いいね（1人1回制御🔥）
+  const likeTweet = async (tweetId: string) => {
+    if (!user) return alert("ログインしてちょ❤️")
 
-    const { error } = await supabase
-      .from("tweets")
-      .update({ likes: currentLikes + 1 })
-      .eq("id", id)
+    // ① likes テーブルに追加
+    const { error } = await supabase.from("likes").insert({
+      user_id: user.id,
+      tweet_id: tweetId,
+    })
 
     if (error) {
-      console.error(error)
+      alert("もういいねしとるで！😆")
       return
     }
+
+    // ② tweets.likes を +1
+    await supabase.rpc("increment_likes", {
+      tweet_id_input: tweetId,
+    })
 
     fetchTweets()
   }
@@ -111,7 +110,7 @@ export default function Home() {
             const email = prompt("メールアドレス入力してちょ📧")
             if (!email) return
             await supabase.auth.signInWithOtp({ email })
-            alert("メール送ったで！📩（Vercelで確認な！）")
+            alert("メール送ったで！📩")
           }}
           className="m-4 px-4 py-2 bg-green-500 rounded"
         >
@@ -147,7 +146,7 @@ export default function Home() {
 
         <button
           onClick={postTweet}
-          className="mt-2 px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
+          className="mt-2 px-4 py-2 bg-blue-500 rounded"
         >
           投稿
         </button>
@@ -158,22 +157,18 @@ export default function Home() {
         {tweets.map((tweet) => (
           <div key={tweet.id} className="p-4">
             <div className="font-semibold">@{tweet.user_name}</div>
-
             <div className="my-2">{tweet.content}</div>
 
             {tweet.image_url && (
-              <img
-                src={tweet.image_url}
-                className="mt-2 rounded max-h-60"
-              />
+              <img src={tweet.image_url} className="mt-2 rounded max-h-60" />
             )}
 
-            <div className="text-sm text-gray-400 mt-1">
+            <div className="text-sm text-gray-400">
               {new Date(tweet.created_at).toLocaleString()}
             </div>
 
             <button
-              onClick={() => likeTweet(tweet.id, tweet.likes)}
+              onClick={() => likeTweet(tweet.id)}
               className="mt-2 text-sm hover:text-red-400"
             >
               ❤️ {tweet.likes}
