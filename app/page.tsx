@@ -52,7 +52,7 @@ export default function Home() {
     fetchTweets()
   }, [])
 
-  // ✍️ 投稿
+  // ✍️ 投稿（ユーザー名固定）
   const postTweet = async () => {
     if (!user) {
       alert("ログインしてから投稿してちょ！😆")
@@ -62,13 +62,14 @@ export default function Home() {
     if (!text.trim()) return
 
     const { error } = await supabase.from("tweets").insert({
-      user_name: user.email, // ログインユーザー
+      user_name: user.email, // ← 完全固定🔥
       content: text,
       image_url: imageUrl || null,
     })
 
     if (error) {
       console.error(error)
+      alert("投稿失敗したでぇ💦")
       return
     }
 
@@ -77,8 +78,13 @@ export default function Home() {
     fetchTweets()
   }
 
-  // ❤️ いいね
+  // ❤️ いいね（回数カウント）
   const likeTweet = async (id: string, currentLikes: number) => {
+    if (!user) {
+      alert("ログインしてからいいねしてちょ❤️")
+      return
+    }
+
     const { error } = await supabase
       .from("tweets")
       .update({ likes: currentLikes + 1 })
@@ -105,7 +111,7 @@ export default function Home() {
             const email = prompt("メールアドレス入力してちょ📧")
             if (!email) return
             await supabase.auth.signInWithOtp({ email })
-            alert("メール送ったで！📩")
+            alert("メール送ったで！📩（Vercelで確認な！）")
           }}
           className="m-4 px-4 py-2 bg-green-500 rounded"
         >
@@ -152,6 +158,7 @@ export default function Home() {
         {tweets.map((tweet) => (
           <div key={tweet.id} className="p-4">
             <div className="font-semibold">@{tweet.user_name}</div>
+
             <div className="my-2">{tweet.content}</div>
 
             {tweet.image_url && (
