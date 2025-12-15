@@ -16,7 +16,7 @@ type Tweet = {
 export default function Home() {
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [text, setText] = useState("")
-  const [imageUrl, setImageUrl] = useState("")
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [user, setUser] = useState<User | null>(null)
 
   // 🔐 ログイン状態監視
@@ -52,33 +52,49 @@ export default function Home() {
 
   // ✍️ 投稿
   const postTweet = async () => {
-    if (!user) {
-      alert("ログインしてから投稿してちょ😆")
-      return
+    if (!user) return alert("ログインしてから投稿してちょ！😆")
+    if (!text.trim() && !imageFile) return alert("内容か画像を入力してちょ！")
+
+    let image_url: string | null = null
+
+    if (imageFile) {
+      const fileExt = imageFile.name.split(".").pop()
+      const fileName = `${Date.now()}.${fileExt}`
+      const { data, error } = await supabase.storage
+        .from("tweet-images")
+        .upload(fileName, imageFile)
+
+      if (error) {
+        alert("画像アップロード失敗💦")
+        console.error(error)
+      } else {
+        image_url = supabase.storage
+          .from("tweet-images")
+          .getPublicUrl(fileName).data.publicUrl
+      }
     }
-    if (!text.trim()) return
 
     const { error } = await supabase.from("tweets").insert({
       user_name: user.email,
       content: text,
-      image_url: imageUrl || null,
+      image_url: image_url,
     })
 
     if (error) {
-      alert("投稿失敗したで💦")
+      alert("投稿失敗💦")
+      console.error(error)
       return
     }
 
     setText("")
-    setImageUrl("")
+    setImageFile(null)
     fetchTweets()
   }
 
-  // ❤️ いいね（1人1回制御🔥）
+  // ❤️ いいね（1人1回制御）
   const likeTweet = async (tweetId: string) => {
-    if (!user) return alert("ログインしてちょ❤️")
+    if (!user) return alert("ログインしてからいいねしてちょ❤️")
 
-    // ① likes テーブルに追加
     const { error } = await supabase.from("likes").insert({
       user_id: user.id,
       tweet_id: tweetId,
@@ -89,11 +105,7 @@ export default function Home() {
       return
     }
 
-    // ② tweets.likes を +1
-    await supabase.rpc("increment_likes", {
-      tweet_id_input: tweetId,
-    })
-
+    await supabase.rpc("increment_likes", { tweet_id_input: tweetId })
     fetchTweets()
   }
 
@@ -110,7 +122,7 @@ export default function Home() {
             const email = prompt("メールアドレス入力してちょ📧")
             if (!email) return
             await supabase.auth.signInWithOtp({ email })
-            alert("メール送ったで！📩")
+            alert("メール送ったで！📩（Vercelで確認な！）")
           }}
           className="m-4 px-4 py-2 bg-green-500 rounded"
         >
@@ -131,10 +143,10 @@ export default function Home() {
       {/* ✍️ 投稿フォーム */}
       <div className="p-4 border-b border-gray-700">
         <input
-          className="w-full mb-2 bg-black border border-gray-600 p-2 rounded"
-          placeholder="画像URL（任意）"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
+          type="file"
+          accept="image/*"
+          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+          className="w-full mb-2 text-black"
         />
 
         <textarea
@@ -146,7 +158,7 @@ export default function Home() {
 
         <button
           onClick={postTweet}
-          className="mt-2 px-4 py-2 bg-blue-500 rounded"
+          className="mt-2 px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
         >
           投稿
         </button>
