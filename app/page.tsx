@@ -24,6 +24,10 @@ type Reply = {
   created_at: string
   likes: number
 }
+type ReplyTree = Reply & {
+  children: ReplyTree[]
+}
+
 
 
 
@@ -43,6 +47,7 @@ export default function Home() {
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({})
   const [replyReplyOpen, setReplyReplyOpen] = useState<Record<string, boolean>>({})
 　const [replyReplyText, setReplyReplyText] = useState<Record<string, string>>({})
+  const [replies, setReplies] = useState<Record<string, ReplyTree[]>>({})
 
 
 
@@ -235,10 +240,12 @@ const fetchReplies = async (tweetId: string) => {
   if (data) {
     setReplies((prev) => ({
       ...prev,
-      [tweetId]: buildReplyTree(data),
+      [tweetId]: buildReplyTree(data), // ←ここでReply[]をReplyTree[]に変換
     }))
   }
 }
+
+
 
 
   // 親リプごとに階層化
@@ -247,7 +254,7 @@ const buildReplyTree = (replies: Reply[]): ReplyTree[] => {
   const roots: ReplyTree[] = []
 
   replies.forEach((r) => {
-    map[r.id] = { ...r, children: [] }
+    map[r.id] = { ...r, children: [] } // childrenを必ず作る
   })
 
   replies.forEach((r) => {
@@ -260,6 +267,7 @@ const buildReplyTree = (replies: Reply[]): ReplyTree[] => {
 
   return roots
 }
+
 
 type ReplyTree = Reply & { children: ReplyTree[] }
 
