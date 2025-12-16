@@ -21,6 +21,7 @@ type Reply = {
   user_name: string
   content: string
   created_at: string
+  likes: number 
 }
 
 
