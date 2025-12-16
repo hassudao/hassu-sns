@@ -47,15 +47,14 @@ export default function Home() {
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({})
   const [replyReplyOpen, setReplyReplyOpen] = useState<Record<string, boolean>>({})
   const [replyReplyText, setReplyReplyText] = useState<Record<string, string>>({})
+  const [isComposing, setIsComposing] = useState<Record<string, boolean>>({})
 
   // 🔐 ログイン監視
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
-
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => setUser(session?.user ?? null)
     )
-
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -64,7 +63,6 @@ export default function Home() {
     const query = supabase.from("tweets").select("*")
     if (mode === "latest") query.order("created_at", { ascending: false })
     else query.order("likes", { ascending: false })
-
     const { data } = await query
     if (data) {
       setTweets(data)
@@ -88,41 +86,19 @@ export default function Home() {
   const postTweet = async () => {
     if (!user) return alert("ログインしてから投稿してちょ😆")
     if (!text.trim() && !imageFile) return alert("文章か画像は欲しいがね😅")
-
     setUploading(true)
     let image_url: string | null = null
-
     if (imageFile) {
-      if (imageFile.size > 3 * 1024 * 1024) {
-        alert("画像は3MBまでだで📸")
-        setUploading(false)
-        return
-      }
+      if (imageFile.size > 3 * 1024 * 1024) { alert("画像は3MBまでだで📸"); setUploading(false); return }
       const ext = imageFile.name.split(".").pop()
       const fileName = `${user.id}/${Date.now()}.${ext}`
       const { error } = await supabase.storage.from("tweet-images").upload(fileName, imageFile)
-      if (error) {
-        console.error(error)
-        setUploadError("画像アップロード失敗だがね💦")
-        setUploading(false)
-        return
-      }
+      if (error) { console.error(error); setUploadError("画像アップロード失敗だがね💦"); setUploading(false); return }
       const { data } = supabase.storage.from("tweet-images").getPublicUrl(fileName)
       image_url = data.publicUrl
     }
-
-    await supabase.from("tweets").insert({
-      user_id: user.id,
-      user_name: user.email,
-      content: text,
-      image_url,
-    })
-
-    setText("")
-    setImageFile(null)
-    setPreviewUrl(null)
-    setUploadError(null)
-    setUploading(false)
+    await supabase.from("tweets").insert({ user_id: user.id, user_name: user.email, content: text, image_url })
+    setText(""); setImageFile(null); setPreviewUrl(null); setUploadError(null); setUploading(false)
     fetchTweets()
   }
 
@@ -130,23 +106,15 @@ export default function Home() {
   const postReply = async (tweetId: string) => {
     if (!user) return alert("ログインしてちょ😆")
     if (!replyText[tweetId]?.trim()) return
-
-    await supabase.from("replies").insert({
-      tweet_id: tweetId,
-      user_id: user.id,
-      user_name: user.email,
-      content: replyText[tweetId],
-    })
-
+    await supabase.from("replies").insert({ tweet_id: tweetId, user_id: user.id, user_name: user.email, content: replyText[tweetId] })
     setReplyText((prev) => ({ ...prev, [tweetId]: "" }))
     fetchReplies(tweetId)
   }
 
-  // ✍️ リプへの返信投稿
+  // ✍️ リプへの返信
   const postReplyToReply = async (tweetId: string, parentReplyId: string) => {
     if (!user) return
     if (!replyReplyText[parentReplyId]?.trim()) return
-
     await supabase.from("replies").insert({
       tweet_id: tweetId,
       parent_reply_id: parentReplyId,
@@ -154,7 +122,6 @@ export default function Home() {
       user_name: user.email,
       content: replyReplyText[parentReplyId],
     })
-
     setReplyReplyText((prev) => ({ ...prev, [parentReplyId]: "" }))
     fetchReplies(tweetId)
   }
@@ -167,13 +134,20 @@ export default function Home() {
     fetchReplyCount(tweetId)
   }
 
+  // 🗑️ ツイート削除
+  const deleteTweet = async (tweetId: string) => {
+    if (!confirm("ほんとに削除する？😢")) return
+    await supabase.from("tweets").delete().eq("id", tweetId)
+    fetchTweets()
+  }
+
   // 💬 リプ数取得
   const fetchReplyCount = async (tweetId: string) => {
     const { count } = await supabase.from("replies").select("*", { count: "exact", head: true }).eq("tweet_id", tweetId)
     setReplyCounts((prev) => ({ ...prev, [tweetId]: count ?? 0 }))
   }
 
-  // 💬 リプ取得（階層化）
+  // 💬 リプ取得
   const fetchReplies = async (tweetId: string) => {
     const { data } = await supabase.from("replies").select("*").eq("tweet_id", tweetId).order("created_at", { ascending: true })
     if (data) setReplies((prev) => ({ ...prev, [tweetId]: buildReplyTree(data) }))
@@ -183,7 +157,7 @@ export default function Home() {
   const buildReplyTree = (replies: Reply[]): ReplyTree[] => {
     const map: Record<string, ReplyTree> = {}
     const roots: ReplyTree[] = []
-    replies.forEach((r) => (map[r.id] = { ...r, children: [] }))
+    replies.forEach((r) => map[r.id] = { ...r, children: [] })
     replies.forEach((r) => {
       if (r.parent_reply_id && map[r.parent_reply_id]) map[r.parent_reply_id].children.push(map[r.id])
       else roots.push(map[r.id])
@@ -202,17 +176,8 @@ export default function Home() {
       await supabase.from("likes").insert({ user_id: user.id, tweet_id: tweetId })
       await supabase.rpc("increment_likes", { tweet_id_input: tweetId })
     }
-    fetchTweets()
-    fetchMyLikes()
+    fetchTweets(); fetchMyLikes()
   }
-
-  // 🗑️ ツイート削除
-const deleteTweet = async (tweetId: string) => {
-  if (!confirm("ほんとに削除する？😢")) return
-  await supabase.from("tweets").delete().eq("id", tweetId)
-  fetchTweets()
-}
-
 
   // ❤️ リプ・リプ返信いいね
   const likeReply = async (replyId: string, tweetId: string) => {
@@ -226,12 +191,7 @@ const deleteTweet = async (tweetId: string) => {
     return { ...reply, children: reply.children.map((c) => updateLikes(c, replyId)) }
   }
 
-  const toggleReplyReply = (replyId: string) => {
-    setReplyReplyOpen((prev) => ({ ...prev, [replyId]: !prev[replyId] }))
-  }
-
-  // 🧹 プレビュー解放
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+  const toggleReplyReply = (replyId: string) => setReplyReplyOpen((prev) => ({ ...prev, [replyId]: !prev[replyId] }))
 
   // ──────────────── ReplyNode ────────────────
   const ReplyNode = ({ reply, tweetId, depth = 0 }: { reply: ReplyTree; tweetId: string; depth?: number }) => (
@@ -245,27 +205,29 @@ const deleteTweet = async (tweetId: string) => {
             {user && <button onClick={() => toggleReplyReply(reply.id)} className="hover:text-blue-400">💬</button>}
           </div>
 
-          {/* リプへの返信入力 */}
+          {/* リプへの返信入力 (IME対応) */}
           {replyReplyOpen[reply.id] && user && (
             <div className="flex gap-2 mt-1">
               <input
                 className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-xs"
                 placeholder="このリプに返信…"
                 value={replyReplyText[reply.id] ?? ""}
-                onChange={(e) => setReplyReplyText((prev) => ({ ...prev, [reply.id]: e.target.value }))}
+                onCompositionStart={() => setIsComposing((prev) => ({ ...prev, [reply.id]: true }))}
+                onCompositionEnd={() => setIsComposing((prev) => ({ ...prev, [reply.id]: false }))}
+                onChange={(e) => {
+                  if (!isComposing[reply.id]) setReplyReplyText((prev) => ({ ...prev, [reply.id]: e.target.value }))
+                }}
               />
               <button onClick={() => postReplyToReply(tweetId, reply.id)} className="text-blue-400 text-xs">送信</button>
             </div>
           )}
         </div>
 
-        {/* 自分のリプだけ削除可 */}
         {user?.id === reply.user_id && (
           <button onClick={() => deleteReply(reply.id, tweetId)} className="text-red-400 text-xs hover:text-red-500">🗑️</button>
         )}
       </div>
 
-      {/* 子リプ再帰表示 */}
       {reply.children.map((child) => <ReplyNode key={child.id} reply={child} tweetId={tweetId} depth={depth + 1} />)}
     </div>
   )
@@ -273,20 +235,9 @@ const deleteTweet = async (tweetId: string) => {
   return (
     <main className="min-h-screen bg-black text-white">
       <h1 className="text-2xl font-bold p-4 border-b border-gray-700">HASSU SNS 🐦</h1>
-
       {!user ? (
-        <button
-          onClick={async () => {
-            const email = prompt("メールアドレス入力してちょ📧")
-            if (!email) return
-            await supabase.auth.signInWithOtp({ email })
-            alert("メール送ったで📩")
-          }}
-          className="m-4 px-4 py-2 bg-green-500 rounded"
-        >ログイン</button>
-      ) : (
-        <div className="m-4 text-sm text-green-400">ログイン中：{user.email}</div>
-      )}
+        <button onClick={async () => { const email = prompt("メールアドレス入力してちょ📧"); if (!email) return; await supabase.auth.signInWithOtp({ email }); alert("メール送ったで📩") }} className="m-4 px-4 py-2 bg-green-500 rounded">ログイン</button>
+      ) : <div className="m-4 text-sm text-green-400">ログイン中：{user.email}</div>}
 
       {/* タブ */}
       <div className="flex border-b border-gray-700">
