@@ -53,17 +53,22 @@ export default function Home() {
 
   // 🐦 ツイート取得（最新 / おすすめ）
   const fetchTweets = async () => {
-    const query = supabase.from("tweets").select("*")
+  const query = supabase.from("tweets").select("*")
 
-    if (mode === "latest") {
-      query.order("created_at", { ascending: false })
-    } else {
-      query.order("likes", { ascending: false })
-    }
-
-    const { data } = await query
-    if (data) setTweets(data)
+  if (mode === "latest") {
+    query.order("created_at", { ascending: false })
+  } else {
+    query.order("likes", { ascending: false })
   }
+
+  const { data } = await query
+
+  if (data) {
+    setTweets(data)
+    data.forEach((tweet) => fetchReplyCount(tweet.id))
+  }
+}
+
 
   // ❤️ 自分のいいね一覧
   const fetchMyLikes = async () => {
