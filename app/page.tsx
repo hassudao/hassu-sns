@@ -13,33 +13,31 @@ type Tweet = {
   image_url: string | null
   likes: number
   created_at: string
-  parent_id: string | null
 }
 
 export default function Home() {
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [likedTweetIds, setLikedTweetIds] = useState<string[]>([])
   const [mode, setMode] = useState<"latest" | "popular">("latest")
-
   const [text, setText] = useState("")
-  const [replyTo, setReplyTo] = useState<Tweet | null>(null)
-
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
 
-  // 🔐 ログイン監視
+  // 🔐 ログイン状態監視
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
+
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_e, session) => setUser(session?.user ?? null)
+      (_event, session) => setUser(session?.user ?? null)
     )
+
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  // 🐦 ツイート取得
+  // 🐦 ツイート取得（最新 / おすすめ）
   const fetchTweets = async () => {
     const query = supabase.from("tweets").select("*")
 
@@ -53,9 +51,12 @@ export default function Home() {
     if (data) setTweets(data)
   }
 
-  // ❤️ いいね取得
+  // ❤️ 自分のいいね一覧
   const fetchMyLikes = async () => {
-    if (!user) return setLikedTweetIds([])
+    if (!user) {
+      setLikedTweetIds([])
+      return
+    }
 
     const { data } = await supabase
       .from("likes")
@@ -70,45 +71,82 @@ export default function Home() {
     fetchMyLikes()
   }, [user, mode])
 
-  // ✍️ 投稿 & リプライ
+  // ✍️ 投稿
   const postTweet = async () => {
-    if (!user) return alert("ログインしてちょ😆")
-    if (!text.trim()) return alert("文章書いてちょ😅")
+    if (!user) return alert("ログインしてから投稿してちょ😆")
+    if (!text.trim() && !imageFile) return alert("文章か画像は欲しいがね😅")
 
     setUploading(true)
+    let image_url: string | null = null
+
+    if (imageFile) {
+      if (imageFile.size > 3 * 1024 * 1024) {
+        alert("画像は3MBまでだで📸")
+        setUploading(false)
+        return
+      }
+
+      const ext = imageFile.name.split(".").pop()
+      const fileName = `${user.id}/${Date.now()}.${ext}`
+
+      const { error } = await supabase.storage
+        .from("tweet-images")
+        .upload(fileName, imageFile)
+
+      if (error) {
+        console.error(error)
+        setUploadError("画像アップロード失敗だがね💦")
+        setUploading(false)
+        return
+      }
+
+      const { data } = supabase.storage
+        .from("tweet-images")
+        .getPublicUrl(fileName)
+
+      image_url = data.publicUrl
+    }
 
     await supabase.from("tweets").insert({
       user_id: user.id,
       user_name: user.email,
       content: text,
-      parent_id: replyTo?.id ?? null,
+      image_url,
     })
 
     setText("")
-    setReplyTo(null)
+    setImageFile(null)
+    setPreviewUrl(null)
+    setUploadError(null)
     setUploading(false)
     fetchTweets()
   }
 
-  // ❤️ いいね
+  // ❤️ いいねON/OFF
   const likeTweet = async (tweetId: string) => {
-    if (!user) return alert("ログインしてちょ❤️")
+    if (!user) return alert("ログインしてからいいねしてちょ❤️")
 
-    const liked = likedTweetIds.includes(tweetId)
+    const isLiked = likedTweetIds.includes(tweetId)
 
-    if (liked) {
-      await supabase.from("likes").delete()
+    if (isLiked) {
+      await supabase
+        .from("likes")
+        .delete()
         .eq("user_id", user.id)
         .eq("tweet_id", tweetId)
 
-      await supabase.rpc("decrement_likes", { tweet_id_input: tweetId })
+      await supabase.rpc("decrement_likes", {
+        tweet_id_input: tweetId,
+      })
     } else {
       await supabase.from("likes").insert({
         user_id: user.id,
         tweet_id: tweetId,
       })
 
-      await supabase.rpc("increment_likes", { tweet_id_input: tweetId })
+      await supabase.rpc("increment_likes", {
+        tweet_id_input: tweetId,
+      })
     }
 
     fetchTweets()
@@ -116,15 +154,18 @@ export default function Home() {
   }
 
   // 🗑️ 削除
-  const deleteTweet = async (id: string) => {
-    if (!confirm("消すで？😢")) return
-    await supabase.from("tweets").delete().eq("id", id)
+  const deleteTweet = async (tweetId: string) => {
+    if (!confirm("ほんとに削除する？😢")) return
+    await supabase.from("tweets").delete().eq("id", tweetId)
     fetchTweets()
   }
 
-  // 親ツイだけ
-  const parents = tweets.filter((t) => t.parent_id === null)
-  const replies = tweets.filter((t) => t.parent_id !== null)
+  // 🧹 プレビューURL解放
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -132,19 +173,61 @@ export default function Home() {
         HASSU SNS 🐦
       </h1>
 
+      {!user ? (
+        <button
+          onClick={async () => {
+            const email = prompt("メールアドレス入力してちょ📧")
+            if (!email) return
+            await supabase.auth.signInWithOtp({ email })
+            alert("メール送ったで📩")
+          }}
+          className="m-4 px-4 py-2 bg-green-500 rounded"
+        >
+          ログイン
+        </button>
+      ) : (
+        <div className="m-4 text-sm text-green-400">
+          ログイン中：{user.email}
+        </div>
+      )}
+
+      {/* タブ */}
+      <div className="flex border-b border-gray-700">
+        <button
+          onClick={() => setMode("latest")}
+          className={`flex-1 py-2 ${
+            mode === "latest"
+              ? "border-b-2 border-blue-500 font-bold"
+              : "text-gray-400"
+          }`}
+        >
+          最新
+        </button>
+        <button
+          onClick={() => setMode("popular")}
+          className={`flex-1 py-2 ${
+            mode === "popular"
+              ? "border-b-2 border-red-400 font-bold"
+              : "text-gray-400"
+          }`}
+        >
+          おすすめ🔥
+        </button>
+      </div>
+
       {/* 投稿 */}
-      <div className="p-4 border-b border-gray-700 space-y-2">
-        {replyTo && (
-          <div className="text-xs text-blue-400">
-            @{replyTo.user_name} へリプライ中💬
-            <button
-              onClick={() => setReplyTo(null)}
-              className="ml-2 text-red-400"
-            >
-              ×
-            </button>
-          </div>
-        )}
+      <div className="p-4 border-b border-gray-700 space-y-3">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null
+            setImageFile(file)
+            setPreviewUrl(file ? URL.createObjectURL(file) : null)
+          }}
+        />
+
+        {previewUrl && <img src={previewUrl} className="max-h-60 rounded" />}
 
         <textarea
           className="w-full bg-black border border-gray-600 p-2 rounded"
@@ -164,7 +247,7 @@ export default function Home() {
 
       {/* TL */}
       <div className="divide-y divide-gray-700">
-        {parents.map((tweet) => (
+        {tweets.map((tweet) => (
           <div key={tweet.id} className="p-4">
             <div className="flex justify-between">
               <div>@{tweet.user_name}</div>
@@ -174,45 +257,29 @@ export default function Home() {
             </div>
 
             <div className="text-xs text-gray-400">
-              {timeAgo(tweet.created_at)}
+              {new Date(tweet.created_at).toLocaleString()}
             </div>
 
             <div className="mt-1">{tweet.content}</div>
 
-            <div className="flex gap-4 mt-2 text-sm">
+            {tweet.image_url && (
+              <img src={tweet.image_url} className="mt-2 max-h-60 rounded" />
+            )}
+
+            <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
               <button
                 onClick={() => likeTweet(tweet.id)}
                 className={
                   likedTweetIds.includes(tweet.id)
                     ? "text-red-400"
-                    : "text-gray-400"
+                    : "hover:text-red-400"
                 }
               >
                 ❤️ {tweet.likes}
               </button>
 
-              <button
-                onClick={() => setReplyTo(tweet)}
-                className="text-blue-400"
-              >
-                💬 リプライ
-              </button>
+              <span>・{timeAgo(tweet.created_at)}</span>
             </div>
-
-            {/* リプライ表示 */}
-            {replies
-              .filter((r) => r.parent_id === tweet.id)
-              .map((r) => (
-                <div
-                  key={r.id}
-                  className="ml-6 mt-3 p-3 border-l border-gray-600"
-                >
-                  <div className="text-xs text-gray-400">
-                    @{r.user_name}・{timeAgo(r.created_at)}
-                  </div>
-                  <div>{r.content}</div>
-                </div>
-              ))}
           </div>
         ))}
       </div>
