@@ -17,8 +17,10 @@ export default function Home() {
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [text, setText] = useState("")
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [user, setUser] = useState<User | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
 
   // 🔐 ログイン状態監視
   useEffect(() => {
@@ -37,6 +39,7 @@ export default function Home() {
       .from("tweets")
       .select("*")
       .order("created_at", { ascending: false })
+
     if (data) setTweets(data)
   }
 
@@ -47,29 +50,40 @@ export default function Home() {
   // ✍️ 投稿
   const postTweet = async () => {
     if (!user) return alert("ログインしてから投稿してちょ！😆")
-    if (!text.trim() && !imageFile) return alert("内容か画像を入力してちょ！")
+    if (!text.trim() && !imageFile) {
+      alert("文章か画像どっちかは欲しいで！😅")
+      return
+    }
 
+    setUploading(true)
     let image_url: string | null = null
 
     if (imageFile) {
-      const fileExt = imageFile.name.split(".").pop()
-      const fileName = `${Date.now()}.${fileExt}`
+      if (imageFile.size > 3 * 1024 * 1024) {
+        alert("画像は3MBまでだで！📸")
+        setUploading(false)
+        return
+      }
+
+      const ext = imageFile.name.split(".").pop()
+      const fileName = `${user.id}/${Date.now()}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from("tweet-images")
         .upload(fileName, imageFile)
 
       if (uploadError) {
-        setUploadError("画像アップロード失敗💦")
         console.error(uploadError)
+        setUploadError("画像アップロード失敗したがね💦")
+        setUploading(false)
         return
-      } else {
-        setUploadError(null)
-        const { data } = supabase.storage
-          .from("tweet-images")
-          .getPublicUrl(fileName)
-        image_url = data.publicUrl
       }
+
+      const { data } = supabase.storage
+        .from("tweet-images")
+        .getPublicUrl(fileName)
+
+      image_url = data.publicUrl
     }
 
     const { error } = await supabase.from("tweets").insert({
@@ -79,13 +93,15 @@ export default function Home() {
     })
 
     if (error) {
-      alert("投稿失敗💦")
       console.error(error)
-      return
+      alert("投稿失敗したで💦")
     }
 
     setText("")
     setImageFile(null)
+    setPreviewUrl(null)
+    setUploadError(null)
+    setUploading(false)
     fetchTweets()
   }
 
@@ -103,7 +119,10 @@ export default function Home() {
       return
     }
 
-    await supabase.rpc("increment_likes", { tweet_id_input: tweetId })
+    await supabase.rpc("increment_likes", {
+      tweet_id_input: tweetId,
+    })
+
     fetchTweets()
   }
 
@@ -113,7 +132,7 @@ export default function Home() {
         HASSU SNS 🐦
       </h1>
 
-      {/* 🔐 ログインUI */}
+      {/* 🔐 ログイン */}
       {!user ? (
         <button
           onClick={async () => {
@@ -139,19 +158,36 @@ export default function Home() {
       )}
 
       {/* ✍️ 投稿フォーム */}
-      <div className="p-4 border-b border-gray-700 space-y-2">
-        <label className="block text-sm font-semibold mb-1">
-          画像を選択（任意）
+      <div className="p-4 border-b border-gray-700 space-y-3">
+        <label className="block text-sm font-bold">
+          📸 画像投稿（任意）
         </label>
+
         <input
           type="file"
           accept="image/*"
-          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-          className="w-full p-2 bg-gray-800 text-white rounded"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            setImageFile(file)
+            setPreviewUrl(URL.createObjectURL(file))
+          }}
+          className="block w-full text-sm
+            file:mr-4 file:py-2 file:px-4
+            file:rounded file:border-0
+            file:bg-blue-600 file:text-white
+            hover:file:bg-blue-700"
         />
 
+        {previewUrl && (
+          <img
+            src={previewUrl}
+            className="max-h-60 rounded border border-gray-600"
+          />
+        )}
+
         {uploadError && (
-          <div className="text-red-500 text-sm">{uploadError}</div>
+          <div className="text-red-400 text-sm">{uploadError}</div>
         )}
 
         <textarea
@@ -163,9 +199,10 @@ export default function Home() {
 
         <button
           onClick={postTweet}
-          className="mt-2 px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
+          disabled={uploading}
+          className="px-4 py-2 bg-blue-500 rounded disabled:opacity-50"
         >
-          投稿
+          {uploading ? "アップロード中…⏳" : "投稿"}
         </button>
       </div>
 
