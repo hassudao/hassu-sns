@@ -36,6 +36,8 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [replies, setReplies] = useState<Record<string, Reply[]>>({})
 　const [replyText, setReplyText] = useState<Record<string, string>>({})
+  const [replyCounts, setReplyCounts] = useState<Record<string, number>>({})
+
 
 
   // 🔐 ログイン状態監視
@@ -132,6 +134,12 @@ export default function Home() {
     setUploadError(null)
     setUploading(false)
     fetchTweets()
+
+    if (data) {
+  setTweets(data)
+  data.forEach((tweet) => fetchReplyCount(tweet.id))
+}
+
   }
   // ✍️ リプライ投稿
 const postReply = async (tweetId: string) => {
@@ -148,6 +156,19 @@ const postReply = async (tweetId: string) => {
   setReplyText((prev) => ({ ...prev, [tweetId]: "" }))
   fetchReplies(tweetId)
 }
+  // 💬 リプライ数取得
+const fetchReplyCount = async (tweetId: string) => {
+  const { count } = await supabase
+    .from("replies")
+    .select("*", { count: "exact", head: true })
+    .eq("tweet_id", tweetId)
+
+  setReplyCounts((prev) => ({
+    ...prev,
+    [tweetId]: count ?? 0,
+  }))
+}
+
 
 
   // ❤️ いいねON/OFF
@@ -310,20 +331,23 @@ const fetchReplies = async (tweetId: string) => {
               <img src={tweet.image_url} className="mt-2 max-h-60 rounded" />
             )}
 
-            <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-              <button
-                onClick={() => likeTweet(tweet.id)}
-                className={
-                  likedTweetIds.includes(tweet.id)
-                    ? "text-red-400"
-                    : "hover:text-red-400"
-                }
-              >
-                ❤️ {tweet.likes}
-              </button>
+<div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
+  <button
+    onClick={() => likeTweet(tweet.id)}
+    className={
+      likedTweetIds.includes(tweet.id)
+        ? "text-red-400"
+        : "hover:text-red-400"
+    }
+  >
+    ❤️ {tweet.likes}
+  </button>
 
-              <span>・{timeAgo(tweet.created_at)}</span>
-            </div>
+  <span>💬 {replyCounts[tweet.id] ?? 0}</span>
+
+  <span>・{timeAgo(tweet.created_at)}</span>
+</div>
+
             <div className="ml-4 mt-2 space-y-1 text-sm">
   {replies[tweet.id]?.map((reply) => (
     <div key={reply.id} className="text-gray-300">
