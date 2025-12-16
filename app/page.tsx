@@ -348,15 +348,22 @@ const fetchReplies = async (tweetId: string) => {
 
 <span
   className="cursor-pointer hover:text-blue-400"
-  onClick={() =>
+  onClick={() => {
+    // 開閉トグル
     setOpenReplies((prev) => ({
       ...prev,
       [tweet.id]: !prev[tweet.id],
     }))
-  }
+
+    // 💬 開くときだけリプライ取得
+    if (!openReplies[tweet.id]) {
+      fetchReplies(tweet.id)
+    }
+  }}
 >
   💬 {replyCounts[tweet.id] ?? 0}
 </span>
+
 
 </div>
 
