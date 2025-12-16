@@ -26,14 +26,10 @@ export default function Home() {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null)
-      }
+      (_event, session) => setUser(session?.user ?? null)
     )
 
-    return () => {
-      listener.subscription.unsubscribe()
-    }
+    return () => listener.subscription.unsubscribe()
   }, [])
 
   // 🐦 ツイート取得
@@ -42,7 +38,6 @@ export default function Home() {
       .from("tweets")
       .select("*")
       .order("created_at", { ascending: false })
-
     if (data) setTweets(data)
   }
 
@@ -60,18 +55,20 @@ export default function Home() {
     if (imageFile) {
       const fileExt = imageFile.name.split(".").pop()
       const fileName = `${Date.now()}.${fileExt}`
-      const { data, error } = await supabase.storage
-        .from("tweet-images")
+      const { error: uploadError } = await supabase.storage
+        .from("tweet-images") // バケット名
         .upload(fileName, imageFile)
 
-      if (error) {
+      if (uploadError) {
         alert("画像アップロード失敗💦")
-        console.error(error)
-      } else {
-        image_url = supabase.storage
-          .from("tweet-images")
-          .getPublicUrl(fileName).data.publicUrl
+        console.error(uploadError)
+        return
       }
+
+      // 公開URL取得
+      image_url = supabase.storage
+        .from("tweet-images")
+        .getPublicUrl(fileName).data.publicUrl
     }
 
     const { error } = await supabase.from("tweets").insert({
@@ -91,7 +88,7 @@ export default function Home() {
     fetchTweets()
   }
 
-  // ❤️ いいね（1人1回制御）
+  // ❤️ いいね
   const likeTweet = async (tweetId: string) => {
     if (!user) return alert("ログインしてからいいねしてちょ❤️")
 
@@ -172,7 +169,10 @@ export default function Home() {
             <div className="my-2">{tweet.content}</div>
 
             {tweet.image_url && (
-              <img src={tweet.image_url} className="mt-2 rounded max-h-60" />
+              <img
+                src={tweet.image_url}
+                className="mt-2 rounded max-h-60"
+              />
             )}
 
             <div className="text-sm text-gray-400">
