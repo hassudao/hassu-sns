@@ -159,6 +159,20 @@ const postReply = async (tweetId: string) => {
   fetchReplies(tweetId)
 
 }
+  // 🗑️ リプライ削除
+const deleteReply = async (replyId: string, tweetId: string) => {
+  if (!confirm("このリプ消すでええ？😢")) return
+
+  await supabase
+    .from("replies")
+    .delete()
+    .eq("id", replyId)
+
+  // 再取得
+  fetchReplies(tweetId)
+  fetchReplyCount(tweetId)
+}
+
   // 💬 リプライ数取得
 const fetchReplyCount = async (tweetId: string) => {
   const { count } = await supabase
@@ -370,16 +384,30 @@ const fetchReplies = async (tweetId: string) => {
 {openReplies[tweet.id] && (
   <>
     <div className="ml-4 mt-2 space-y-1 text-sm">
-      {replies[tweet.id]?.map((reply) => (
-        <div key={reply.id} className="text-gray-300">
+  {replies[tweet.id]?.map((reply) => (
+    <div key={reply.id} className="text-gray-300">
+      <div className="flex justify-between items-start">
+        <div>
           <span className="text-green-400">@{reply.user_name}</span>{" "}
           {reply.content}
           <div className="text-xs text-gray-500">
             {timeAgo(reply.created_at)}
           </div>
         </div>
-      ))}
+
+        {/* 🗑️ 自分のリプだけ削除可 */}
+        {user?.id === reply.user_id && (
+          <button
+            onClick={() => deleteReply(reply.id, tweet.id)}
+            className="text-red-400 text-xs hover:text-red-500"
+          >
+            🗑️
+          </button>
+        )}
+      </div>
     </div>
+  ))}
+</div>
 
     {user && (
       <div className="ml-4 mt-2 flex gap-2">
