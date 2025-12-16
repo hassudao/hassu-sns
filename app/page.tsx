@@ -206,6 +206,14 @@ export default function Home() {
     fetchMyLikes()
   }
 
+  // 🗑️ ツイート削除
+const deleteTweet = async (tweetId: string) => {
+  if (!confirm("ほんとに削除する？😢")) return
+  await supabase.from("tweets").delete().eq("id", tweetId)
+  fetchTweets()
+}
+
+
   // ❤️ リプ・リプ返信いいね
   const likeReply = async (replyId: string, tweetId: string) => {
     if (!user) return
