@@ -239,10 +239,11 @@ const fetchReplies = async (tweetId: string) => {
   if (data) {
     setReplies((prev) => ({
       ...prev,
-      [tweetId]: buildReplyTree(data), // ←ここでReply[]をReplyTree[]に変換
+      [tweetId]: buildReplyTree(data), // ←ここで必ずReplyTree[]に変換
     }))
   }
 }
+
 
 
 
@@ -253,7 +254,7 @@ const buildReplyTree = (replies: Reply[]): ReplyTree[] => {
   const roots: ReplyTree[] = []
 
   replies.forEach((r) => {
-    map[r.id] = { ...r, children: [] } // childrenを必ず作る
+    map[r.id] = { ...r, children: [] } // childrenを必ず初期化
   })
 
   replies.forEach((r) => {
@@ -266,6 +267,7 @@ const buildReplyTree = (replies: Reply[]): ReplyTree[] => {
 
   return roots
 }
+
 
 
 type ReplyTree = Reply & { children: ReplyTree[] }
