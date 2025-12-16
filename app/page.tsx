@@ -483,7 +483,6 @@ const postReplyToReply = async (
 
            </div>
 ))  
-      </div>
     </main>
   )
 }
