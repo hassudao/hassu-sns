@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { supabase } from "./lib/supabase"
 import { User } from "@supabase/supabase-js"
+import { timeAgo } from "./lib/time"
+
 
 type Tweet = {
   id: string
@@ -247,16 +249,21 @@ export default function Home() {
         <img src={tweet.image_url} className="mt-2 max-h-60 rounded" />
       )}
 
-      <button
-        onClick={() => likeTweet(tweet.id)}
-        className={`mt-2 text-sm ${
-          likedTweetIds.includes(tweet.id)
-            ? "text-red-400"
-            : "text-gray-400"
-        }`}
-      >
-        ❤️ {tweet.likes}
-      </button>
+<div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
+  <button
+    onClick={() => likeTweet(tweet.id)}
+    className={
+      likedTweetIds.includes(tweet.id)
+        ? "text-red-400"
+        : "hover:text-red-400"
+    }
+  >
+    ❤️ {tweet.likes}
+  </button>
+
+  <span>・{timeAgo(tweet.created_at)}</span>
+</div>
+
     </div>
   ))}
 </div>
