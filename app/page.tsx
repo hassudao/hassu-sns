@@ -17,12 +17,14 @@ type Tweet = {
 type Reply = {
   id: string
   tweet_id: string
+  parent_reply_id: string | null  // 親リプID
   user_id: string
   user_name: string
   content: string
   created_at: string
-  likes: number 
+  likes: number
 }
+
 
 
 export default function Home() {
@@ -233,10 +235,110 @@ const fetchReplies = async (tweetId: string) => {
   if (data) {
     setReplies((prev) => ({
       ...prev,
-      [tweetId]: data,
+      [tweetId]: buildReplyTree(data),
     }))
   }
 }
+
+
+  // 親リプごとに階層化
+const buildReplyTree = (replies: Reply[]): ReplyTree[] => {
+  const map: Record<string, ReplyTree> = {}
+  const roots: ReplyTree[] = []
+
+  replies.forEach((r) => {
+    map[r.id] = { ...r, children: [] }
+  })
+
+  replies.forEach((r) => {
+    if (r.parent_reply_id && map[r.parent_reply_id]) {
+      map[r.parent_reply_id].children.push(map[r.id])
+    } else {
+      roots.push(map[r.id])
+    }
+  })
+
+  return roots
+}
+
+type ReplyTree = Reply & { children: ReplyTree[] }
+
+  const ReplyNode = ({
+  reply,
+  tweetId,
+  depth = 0,
+}: {
+  reply: ReplyTree
+  tweetId: string
+  depth?: number
+}) => {
+  return (
+    <div className="ml-4" style={{ marginLeft: depth * 16 }}>
+      <div className="flex justify-between items-start text-gray-300">
+        <div>
+          <span className="text-green-400">@{reply.user_name}</span> {reply.content}
+          <div className="text-xs text-gray-500">{timeAgo(reply.created_at)}</div>
+          <div className="flex gap-2 text-xs text-gray-400 mt-1">
+            <button
+              onClick={() => likeReply(reply.id)}
+              className="hover:text-red-400"
+            >
+              ❤️ {reply.likes ?? 0}
+            </button>
+            {user && (
+              <button
+                onClick={() => toggleReplyReply(reply.id)}
+                className="hover:text-blue-400"
+              >
+                💬
+              </button>
+            )}
+          </div>
+
+          {/* リプへの返信入力 */}
+          {replyReplyOpen[reply.id] && user && (
+            <div className="flex gap-2 mt-1">
+              <input
+                className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-xs"
+                placeholder="このリプに返信…"
+                value={replyReplyText[reply.id] ?? ""}
+                onChange={(e) =>
+                  setReplyReplyText((prev) => ({
+                    ...prev,
+                    [reply.id]: e.target.value,
+                  }))
+                }
+              />
+              <button
+                onClick={() => postReplyToReply(tweetId, reply.id)}
+                className="text-blue-400 text-xs"
+              >
+                送信
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 自分のリプだけ削除可 */}
+        {user?.id === reply.user_id && (
+          <button
+            onClick={() => deleteReply(reply.id, tweetId)}
+            className="text-red-400 text-xs hover:text-red-500"
+          >
+            🗑️
+          </button>
+        )}
+      </div>
+
+      {/* 子リプを再帰的に描画 */}
+      {reply.children.map((child) => (
+        <ReplyNode key={child.id} reply={child} tweetId={tweetId} depth={depth + 1} />
+      ))}
+    </div>
+  )
+}
+
+  
 
 
   // 🗑️ 削除
@@ -430,70 +532,10 @@ const postReplyToReply = async (
   <>
     <div className="ml-4 mt-2 space-y-1 text-sm">
       {replies[tweet.id]?.map((reply) => (
-        <div key={reply.id} className="text-gray-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-green-400">@{reply.user_name}</span>{" "}
-              {reply.content}
-              <div className="text-xs text-gray-500">
-                {timeAgo(reply.created_at)}
-              </div>
-
-              {/* リプライへのアクション */}
-              <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
-                <button
-                  onClick={() => likeReply(reply.id)}
-                  className="hover:text-red-400"
-                >
-                  ❤️ {reply.likes ?? 0}
-                </button>
-                <button
-                  onClick={() => toggleReplyReply(reply.id)}
-                  className="hover:text-blue-400"
-                >
-                  💬
-                </button>
-              </div>
-
-              {/* このリプへの返信フォーム */}
-              {replyReplyOpen[reply.id] && user && (
-                <div className="ml-6 mt-1 flex gap-2">
-                  <input
-                    className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-xs"
-                    placeholder="このリプに返信…"
-                    value={replyReplyText[reply.id] ?? ""}
-                    onChange={(e) =>
-                      setReplyReplyText((prev) => ({
-                        ...prev,
-                        [reply.id]: e.target.value,
-                      }))
-                    }
-                  />
-                  <button
-                    onClick={() => postReplyToReply(tweet.id, reply.id)}
-                    className="text-blue-400 text-xs"
-                  >
-                    送信
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 🗑️ 自分のリプだけ削除可 */}
-            {user?.id === reply.user_id && (
-              <button
-                onClick={() => deleteReply(reply.id, tweet.id)}
-                className="text-red-400 text-xs hover:text-red-500"
-              >
-                🗑️
-              </button>
-            )}
-          </div>
-        </div>
+        <ReplyNode key={reply.id} reply={reply} tweetId={tweet.id} />
       ))}
     </div>
-
-    {/* 新規リプライ入力フォーム */}
+    {/* 投稿用入力 */}
     {user && (
       <div className="ml-4 mt-2 flex gap-2">
         <input
@@ -501,10 +543,7 @@ const postReplyToReply = async (
           placeholder="リプライする…"
           value={replyText[tweet.id] ?? ""}
           onChange={(e) =>
-            setReplyText((prev) => ({
-              ...prev,
-              [tweet.id]: e.target.value,
-            }))
+            setReplyText((prev) => ({ ...prev, [tweet.id]: e.target.value }))
           }
         />
         <button
@@ -517,6 +556,7 @@ const postReplyToReply = async (
     )}
   </>
 )}
+
 
           </div>
 ))}    
