@@ -429,7 +429,6 @@ const postReplyToReply = async (
   <>
     <div className="ml-4 mt-2 space-y-1 text-sm">
 {replies[tweet.id]?.map((reply) => (
-{replies[tweet.id]?.map((reply) => (
   <div key={reply.id} className="text-gray-300">
 
     <div className="flex justify-between items-start">
