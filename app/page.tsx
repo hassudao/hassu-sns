@@ -37,6 +37,8 @@ export default function Home() {
   const [replies, setReplies] = useState<Record<string, Reply[]>>({})
 　const [replyText, setReplyText] = useState<Record<string, string>>({})
   const [replyCounts, setReplyCounts] = useState<Record<string, number>>({})
+  const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({})
+
 
 
 
@@ -344,43 +346,58 @@ const fetchReplies = async (tweetId: string) => {
     ❤️ {tweet.likes}
   </button>
 
-  <span>💬 {replyCounts[tweet.id] ?? 0}</span>
+<span
+  className="cursor-pointer hover:text-blue-400"
+  onClick={() =>
+    setOpenReplies((prev) => ({
+      ...prev,
+      [tweet.id]: !prev[tweet.id],
+    }))
+  }
+>
+  💬 {replyCounts[tweet.id] ?? 0}
+</span>
 
-  <span>・{timeAgo(tweet.created_at)}</span>
 </div>
 
-            <div className="ml-4 mt-2 space-y-1 text-sm">
-  {replies[tweet.id]?.map((reply) => (
-    <div key={reply.id} className="text-gray-300">
-      <span className="text-green-400">@{reply.user_name}</span>{" "}
-      {reply.content}
-      <div className="text-xs text-gray-500">
-        {timeAgo(reply.created_at)}
-      </div>
+{openReplies[tweet.id] && (
+  <>
+    <div className="ml-4 mt-2 space-y-1 text-sm">
+      {replies[tweet.id]?.map((reply) => (
+        <div key={reply.id} className="text-gray-300">
+          <span className="text-green-400">@{reply.user_name}</span>{" "}
+          {reply.content}
+          <div className="text-xs text-gray-500">
+            {timeAgo(reply.created_at)}
+          </div>
+        </div>
+      ))}
     </div>
-  ))}
-</div>
-{user && (
-  <div className="ml-4 mt-2 flex gap-2">
-    <input
-      className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-sm"
-      placeholder="リプライする…"
-      value={replyText[tweet.id] ?? ""}
-      onChange={(e) =>
-        setReplyText((prev) => ({
-          ...prev,
-          [tweet.id]: e.target.value,
-        }))
-      }
-    />
-    <button
-      onClick={() => postReply(tweet.id)}
-      className="text-blue-400 text-sm"
-    >
-      送信
-    </button>
-  </div>
+
+    {user && (
+      <div className="ml-4 mt-2 flex gap-2">
+        <input
+          className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-sm"
+          placeholder="リプライする…"
+          value={replyText[tweet.id] ?? ""}
+          onChange={(e) =>
+            setReplyText((prev) => ({
+              ...prev,
+              [tweet.id]: e.target.value,
+            }))
+          }
+        />
+        <button
+          onClick={() => postReply(tweet.id)}
+          className="text-blue-400 text-sm"
+        >
+          送信
+        </button>
+      </div>
+    )}
+  </>
 )}
+
 
           </div>
         ))}
