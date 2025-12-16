@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { supabase } from "./lib/supabase"
 import { User } from "@supabase/supabase-js"
 import { timeAgo } from "./lib/time"
+const [mode, setMode] = useState<"latest" | "popular">("latest")
+
 
 
 type Tweet = {
@@ -38,14 +40,18 @@ export default function Home() {
   }, [])
 
   // 🐦 ツイート取得
-  const fetchTweets = async () => {
-    const { data } = await supabase
-      .from("tweets")
-      .select("*")
-      .order("created_at", { ascending: false })
+const fetchTweets = async () => {
+  let query = supabase.from("tweets").select("*")
 
-    if (data) setTweets(data)
+  if (mode === "latest") {
+    query = query.order("created_at", { ascending: false })
+  } else {
+    query = query.order("likes", { ascending: false })
   }
+
+  const { data } = await query
+  if (data) setTweets(data)
+}
 
   // ❤️ 自分のいいね一覧取得
   const fetchMyLikes = async () => {
@@ -65,9 +71,10 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetchTweets()
-    fetchMyLikes()
-  }, [user])
+  fetchTweets()
+  fetchMyLikes()
+}, [user, mode])
+
 
   // ✍️ 投稿
   const postTweet = async () => {
@@ -224,6 +231,32 @@ export default function Home() {
           投稿
         </button>
       </div>
+
+{/* 🔀 切り替えタブ */}
+<div className="flex border-b border-gray-700">
+  <button
+    onClick={() => setMode("latest")}
+    className={`flex-1 py-2 ${
+      mode === "latest"
+        ? "border-b-2 border-blue-500 font-bold"
+        : "text-gray-400"
+    }`}
+  >
+    最新
+  </button>
+
+  <button
+    onClick={() => setMode("popular")}
+    className={`flex-1 py-2 ${
+      mode === "popular"
+        ? "border-b-2 border-red-400 font-bold"
+        : "text-gray-400"
+    }`}
+  >
+    おすすめ🔥
+  </button>
+</div>
+
 
 {/* TL */}
 <div className="divide-y divide-gray-700">
