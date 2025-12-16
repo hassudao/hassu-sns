@@ -27,7 +27,7 @@ type Reply = {
 type ReplyTree = Reply & {
   children: ReplyTree[]
 }
-
+const [replies, setReplies] = useState<Record<string, ReplyTree[]>>({})
 
 
 
@@ -47,7 +47,6 @@ export default function Home() {
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({})
   const [replyReplyOpen, setReplyReplyOpen] = useState<Record<string, boolean>>({})
 　const [replyReplyText, setReplyReplyText] = useState<Record<string, string>>({})
-  const [replies, setReplies] = useState<Record<string, ReplyTree[]>>({})
 
 
 
