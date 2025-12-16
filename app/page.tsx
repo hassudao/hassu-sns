@@ -21,7 +21,10 @@ type Reply = {
   user_name: string
   content: string
   created_at: string
+  likes: number
+  parent_reply_id: string | null
 }
+
 
 
 export default function Home() {
@@ -191,6 +194,20 @@ const fetchReplyCount = async (tweetId: string) => {
   // ❤️ いいねON/OFF
   const likeTweet = async (tweetId: string) => {
     if (!user) return alert("ログインしてからいいねしてちょ❤️")
+
+    const likeReply = async (replyId: string) => {
+  if (!user) return
+
+  await supabase.rpc("increment_reply_likes", {
+    reply_id_input: replyId,
+  })
+
+  // 再取得
+  Object.keys(openReplies).forEach((tweetId) => {
+    if (openReplies[tweetId]) fetchReplies(tweetId)
+  })
+}
+
 
     const isLiked = likedTweetIds.includes(tweetId)
 
@@ -385,6 +402,44 @@ const fetchReplies = async (tweetId: string) => {
   <>
     <div className="ml-4 mt-2 space-y-1 text-sm">
   {replies[tweet.id]?.map((reply) => (
+    {replyReplyOpen[reply.id] && (
+  <div className="ml-6 mt-1 flex gap-2">
+    <input
+      className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-xs"
+      placeholder="このリプに返信…"
+      value={replyReplyText[reply.id] ?? ""}
+      onChange={(e) =>
+        setReplyReplyText((prev) => ({
+          ...prev,
+          [reply.id]: e.target.value,
+        }))
+      }
+    />
+    <button
+      onClick={() => postReplyToReply(tweet.id, reply.id)}
+      className="text-blue-400 text-xs"
+    >
+      送信
+    </button>
+  </div>
+)}
+
+    <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
+  <button
+    onClick={() => likeReply(reply.id)}
+    className="hover:text-red-400"
+  >
+    ❤️ {reply.likes}
+  </button>
+
+  <button
+    onClick={() => toggleReplyReply(reply.id)}
+    className="hover:text-blue-400"
+  >
+    💬
+  </button>
+</div>
+
     <div key={reply.id} className="text-gray-300">
       <div className="flex justify-between items-start">
         <div>
@@ -424,6 +479,28 @@ const fetchReplies = async (tweetId: string) => {
         />
         <button
           onClick={() => postReply(tweet.id)}
+          const postReplyToReply = async (
+  tweetId: string,
+  parentReplyId: string
+) => {
+  if (!user) return
+
+  await supabase.from("replies").insert({
+    tweet_id: tweetId,
+    parent_reply_id: parentReplyId,
+    user_id: user.id,
+    user_name: user.email,
+    content: replyReplyText[parentReplyId],
+  })
+
+  setReplyReplyText((prev) => ({
+    ...prev,
+    [parentReplyId]: "",
+  }))
+
+  fetchReplies(tweetId)
+}
+
           className="text-blue-400 text-sm"
         >
           送信
