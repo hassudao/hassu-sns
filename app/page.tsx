@@ -111,25 +111,48 @@ export default function Home() {
   }
 
   // ❤️ いいね
-  const likeTweet = async (tweetId: string) => {
-    if (!user) return alert("ログインしてからいいねしてちょ❤️")
+const likeTweet = async (tweetId: string) => {
+  if (!user) {
+    alert("ログインしてからいいねしてちょ❤️")
+    return
+  }
 
-    const { error } = await supabase.from("likes").insert({
+  // ① すでにいいねしてるか確認
+  const { data: existingLike } = await supabase
+    .from("likes")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("tweet_id", tweetId)
+    .single()
+
+  if (existingLike) {
+    // ② いいね解除
+    await supabase
+      .from("likes")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("tweet_id", tweetId)
+
+    // likes -1
+    await supabase.rpc("decrement_likes", {
+      tweet_id_input: tweetId,
+    })
+  } else {
+    // ③ いいね追加
+    await supabase.from("likes").insert({
       user_id: user.id,
       tweet_id: tweetId,
     })
 
-    if (error) {
-      alert("もういいねしとるで！😆")
-      return
-    }
-
+    // likes +1
     await supabase.rpc("increment_likes", {
       tweet_id_input: tweetId,
     })
-
-    fetchTweets()
   }
+
+  fetchTweets()
+}
+
 
   // 🗑️ ツイート削除（自分のみ）
   const deleteTweet = async (tweetId: string) => {
