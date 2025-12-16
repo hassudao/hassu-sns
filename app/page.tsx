@@ -21,10 +21,7 @@ type Reply = {
   user_name: string
   content: string
   created_at: string
-  likes: number
-  parent_reply_id: string | null
 }
-
 
 
 export default function Home() {
@@ -41,6 +38,9 @@ export default function Home() {
 　const [replyText, setReplyText] = useState<Record<string, string>>({})
   const [replyCounts, setReplyCounts] = useState<Record<string, number>>({})
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({})
+  const [replyReplyOpen, setReplyReplyOpen] = useState<Record<string, boolean>>({})
+　const [replyReplyText, setReplyReplyText] = useState<Record<string, string>>({})
+
 
 
 
@@ -195,20 +195,6 @@ const fetchReplyCount = async (tweetId: string) => {
   const likeTweet = async (tweetId: string) => {
     if (!user) return alert("ログインしてからいいねしてちょ❤️")
 
-    const likeReply = async (replyId: string) => {
-  if (!user) return
-
-  await supabase.rpc("increment_reply_likes", {
-    reply_id_input: replyId,
-  })
-
-  // 再取得
-  Object.keys(openReplies).forEach((tweetId) => {
-    if (openReplies[tweetId]) fetchReplies(tweetId)
-  })
-}
-
-
     const isLiked = likedTweetIds.includes(tweetId)
 
     if (isLiked) {
@@ -258,6 +244,47 @@ const fetchReplies = async (tweetId: string) => {
     await supabase.from("tweets").delete().eq("id", tweetId)
     fetchTweets()
   }
+
+  const likeReply = async (replyId: string) => {
+  if (!user) return
+
+  await supabase.rpc("increment_reply_likes", {
+    reply_id_input: replyId,
+  })
+
+  Object.keys(openReplies).forEach((tweetId) => {
+    if (openReplies[tweetId]) fetchReplies(tweetId)
+  })
+}
+const toggleReplyReply = (replyId: string) => {
+  setReplyReplyOpen((prev) => ({
+    ...prev,
+    [replyId]: !prev[replyId],
+  }))
+}
+const postReplyToReply = async (
+  tweetId: string,
+  parentReplyId: string
+) => {
+  if (!user) return
+  if (!replyReplyText[parentReplyId]?.trim()) return
+
+  await supabase.from("replies").insert({
+    tweet_id: tweetId,
+    parent_reply_id: parentReplyId,
+    user_id: user.id,
+    user_name: user.email,
+    content: replyReplyText[parentReplyId],
+  })
+
+  setReplyReplyText((prev) => ({
+    ...prev,
+    [parentReplyId]: "",
+  }))
+
+  fetchReplies(tweetId)
+}
+
 
   // 🧹 プレビューURL解放
   useEffect(() => {
@@ -401,114 +428,59 @@ const fetchReplies = async (tweetId: string) => {
 {openReplies[tweet.id] && (
   <>
     <div className="ml-4 mt-2 space-y-1 text-sm">
-  {replies[tweet.id]?.map((reply) => (
-    {replyReplyOpen[reply.id] && (
-  <div className="ml-6 mt-1 flex gap-2">
-    <input
-      className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-xs"
-      placeholder="このリプに返信…"
-      value={replyReplyText[reply.id] ?? ""}
-      onChange={(e) =>
-        setReplyReplyText((prev) => ({
-          ...prev,
-          [reply.id]: e.target.value,
-        }))
-      }
-    />
-    <button
-      onClick={() => postReplyToReply(tweet.id, reply.id)}
-      className="text-blue-400 text-xs"
-    >
-      送信
-    </button>
-  </div>
-)}
+{replies[tweet.id]?.map((reply) => (
+  <div key={reply.id} className="text-gray-300">
 
-    <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
-  <button
-    onClick={() => likeReply(reply.id)}
-    className="hover:text-red-400"
-  >
-    ❤️ {reply.likes}
-  </button>
-
-  <button
-    onClick={() => toggleReplyReply(reply.id)}
-    className="hover:text-blue-400"
-  >
-    💬
-  </button>
-</div>
-
-    <div key={reply.id} className="text-gray-300">
-      <div className="flex justify-between items-start">
-        <div>
-          <span className="text-green-400">@{reply.user_name}</span>{" "}
-          {reply.content}
-          <div className="text-xs text-gray-500">
-            {timeAgo(reply.created_at)}
-          </div>
+    <div className="flex justify-between items-start">
+      <div>
+        <span className="text-green-400">@{reply.user_name}</span>{" "}
+        {reply.content}
+        <div className="text-xs text-gray-500">
+          {timeAgo(reply.created_at)}
         </div>
-
-        {/* 🗑️ 自分のリプだけ削除可 */}
-        {user?.id === reply.user_id && (
-          <button
-            onClick={() => deleteReply(reply.id, tweet.id)}
-            className="text-red-400 text-xs hover:text-red-500"
-          >
-            🗑️
-          </button>
-        )}
       </div>
-    </div>
-  ))}
-</div>
 
-    {user && (
-      <div className="ml-4 mt-2 flex gap-2">
+      {user?.id === reply.user_id && (
+        <button
+          onClick={() => deleteReply(reply.id, tweet.id)}
+          className="text-red-400 text-xs"
+        >
+          🗑️
+        </button>
+      )}
+    </div>
+
+    {/* ❤️💬 */}
+    <div className="flex items-center gap-4 text-xs text-gray-400 mt-1 ml-4">
+      <button onClick={() => likeReply(reply.id)}>❤️ {reply.likes}</button>
+      <button onClick={() => toggleReplyReply(reply.id)}>💬</button>
+    </div>
+
+    {/* 💬 リプへの返信入力 */}
+    {replyReplyOpen[reply.id] && (
+      <div className="ml-6 mt-1 flex gap-2">
         <input
-          className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-sm"
-          placeholder="リプライする…"
-          value={replyText[tweet.id] ?? ""}
+          className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-xs"
+          placeholder="このリプに返信…"
+          value={replyReplyText[reply.id] ?? ""}
           onChange={(e) =>
-            setReplyText((prev) => ({
+            setReplyReplyText((prev) => ({
               ...prev,
-              [tweet.id]: e.target.value,
+              [reply.id]: e.target.value,
             }))
           }
         />
         <button
-          onClick={() => postReply(tweet.id)}
-          const postReplyToReply = async (
-  tweetId: string,
-  parentReplyId: string
-) => {
-  if (!user) return
-
-  await supabase.from("replies").insert({
-    tweet_id: tweetId,
-    parent_reply_id: parentReplyId,
-    user_id: user.id,
-    user_name: user.email,
-    content: replyReplyText[parentReplyId],
-  })
-
-  setReplyReplyText((prev) => ({
-    ...prev,
-    [parentReplyId]: "",
-  }))
-
-  fetchReplies(tweetId)
-}
-
-          className="text-blue-400 text-sm"
+          onClick={() => postReplyToReply(tweet.id, reply.id)}
+          className="text-blue-400 text-xs"
         >
           送信
         </button>
       </div>
     )}
-  </>
-)}
+  </div>
+))}
+
 
 
           </div>
