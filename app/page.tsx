@@ -6,6 +6,7 @@ import { User } from "@supabase/supabase-js"
 
 type Tweet = {
   id: string
+  user_id: string
   user_name: string
   content: string
   image_url: string | null
@@ -89,6 +90,7 @@ export default function Home() {
 
     // 🐦 DBに投稿
     const { error } = await supabase.from("tweets").insert({
+      user_id: user.id,
       user_name: user.email,
       content: text,
       image_url,
@@ -129,7 +131,25 @@ export default function Home() {
     fetchTweets()
   }
 
-  // 🧹 プレビューURL解放（地味に超大事）
+  // 🗑️ ツイート削除（自分のみ）
+  const deleteTweet = async (tweetId: string) => {
+    if (!confirm("ほんとに削除する？😢")) return
+
+    const { error } = await supabase
+      .from("tweets")
+      .delete()
+      .eq("id", tweetId)
+
+    if (error) {
+      alert("削除できんかったで💦")
+      console.error(error)
+      return
+    }
+
+    fetchTweets()
+  }
+
+  // 🧹 プレビューURL解放
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -219,7 +239,19 @@ export default function Home() {
       <div className="divide-y divide-gray-700">
         {tweets.map((tweet) => (
           <div key={tweet.id} className="p-4">
-            <div className="font-semibold">@{tweet.user_name}</div>
+            <div className="flex items-center justify-between">
+              <div className="font-semibold">@{tweet.user_name}</div>
+
+              {user?.id === tweet.user_id && (
+                <button
+                  onClick={() => deleteTweet(tweet.id)}
+                  className="text-sm text-red-400 hover:text-red-500"
+                >
+                  🗑️ 削除
+                </button>
+              )}
+            </div>
+
             <div className="my-2">{tweet.content}</div>
 
             {tweet.image_url && (
