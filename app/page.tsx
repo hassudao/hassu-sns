@@ -223,34 +223,44 @@ export default function Home() {
         </button>
       </div>
 
-      {/* TL */}
-      <div className="divide-y divide-gray-700">
-        {tweets.map((tweet) => (
-          <div key={tweet.id} className="p-4">
-            <div className="flex justify-between">
-              <div>@{tweet.user_name}</div>
-              {user?.id === tweet.user_id && (
-                <button onClick={() => deleteTweet(tweet.id)}>🗑️</button>
-              )}
-            </div>
+{/* TL */}
+<div className="divide-y divide-gray-700">
+  {tweets.map((tweet) => (
+    <div key={tweet.id} className="p-4">
+      <div className="flex justify-between">
+        <div>@{tweet.user_name}</div>
+        {user?.id === tweet.user_id && (
+          <button onClick={() => deleteTweet(tweet.id)}>🗑️</button>
+        )}
+      </div>
 
-            <div>{tweet.content}</div>
+      {/* 🕒 ここ追加！！！ */}
+      <div className="text-xs text-gray-400">
+        {tweet.created_at
+          ? new Date(tweet.created_at).toLocaleString()
+          : "時刻取得中…"}
+      </div>
 
-            {tweet.image_url && (
-              <img src={tweet.image_url} className="mt-2 max-h-60" />
-            )}
+      <div className="mt-1">{tweet.content}</div>
 
-            <button
-              onClick={() => likeTweet(tweet.id)}
-              className={`mt-2 text-sm ${
-                likedTweetIds.includes(tweet.id)
-                  ? "text-red-400"
-                  : "text-gray-400"
-              }`}
-            >
-              ❤️ {tweet.likes}
-            </button>
-          </div>
+      {tweet.image_url && (
+        <img src={tweet.image_url} className="mt-2 max-h-60 rounded" />
+      )}
+
+      <button
+        onClick={() => likeTweet(tweet.id)}
+        className={`mt-2 text-sm ${
+          likedTweetIds.includes(tweet.id)
+            ? "text-red-400"
+            : "text-gray-400"
+        }`}
+      >
+        ❤️ {tweet.likes}
+      </button>
+    </div>
+  ))}
+</div>
+
         ))}
       </div>
     </main>
