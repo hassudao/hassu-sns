@@ -47,17 +47,18 @@ export default function Home() {
     fetchTweets()
   }, [])
 
-  // ✍️ 投稿
+  // ✍️ 投稿処理
   const postTweet = async () => {
     if (!user) return alert("ログインしてから投稿してちょ！😆")
     if (!text.trim() && !imageFile) {
-      alert("文章か画像どっちかは欲しいで！😅")
+      alert("文章か画像、どっちかは欲しいで！😅")
       return
     }
 
     setUploading(true)
     let image_url: string | null = null
 
+    // 📸 画像アップロード
     if (imageFile) {
       if (imageFile.size > 3 * 1024 * 1024) {
         alert("画像は3MBまでだで！📸")
@@ -68,12 +69,12 @@ export default function Home() {
       const ext = imageFile.name.split(".").pop()
       const fileName = `${user.id}/${Date.now()}.${ext}`
 
-      const { error: uploadError } = await supabase.storage
+      const { error } = await supabase.storage
         .from("tweet-images")
         .upload(fileName, imageFile)
 
-      if (uploadError) {
-        console.error(uploadError)
+      if (error) {
+        console.error(error)
         setUploadError("画像アップロード失敗したがね💦")
         setUploading(false)
         return
@@ -86,6 +87,7 @@ export default function Home() {
       image_url = data.publicUrl
     }
 
+    // 🐦 DBに投稿
     const { error } = await supabase.from("tweets").insert({
       user_name: user.email,
       content: text,
@@ -97,6 +99,7 @@ export default function Home() {
       alert("投稿失敗したで💦")
     }
 
+    // ♻️ リセット
     setText("")
     setImageFile(null)
     setPreviewUrl(null)
@@ -125,6 +128,13 @@ export default function Home() {
 
     fetchTweets()
   }
+
+  // 🧹 プレビューURL解放（地味に超大事）
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -167,22 +177,21 @@ export default function Home() {
           type="file"
           accept="image/*"
           onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (!file) return
+            const file = e.target.files?.[0] ?? null
             setImageFile(file)
-            setPreviewUrl(URL.createObjectURL(file))
+            setPreviewUrl(file ? URL.createObjectURL(file) : null)
           }}
-          className="block w-full text-sm
-            file:mr-4 file:py-2 file:px-4
-            file:rounded file:border-0
-            file:bg-blue-600 file:text-white
-            hover:file:bg-blue-700"
+          className="block w-full text-sm text-gray-300
+                     file:mr-4 file:py-2 file:px-4
+                     file:rounded file:border-0
+                     file:bg-blue-600 file:text-white
+                     hover:file:bg-blue-700"
         />
 
         {previewUrl && (
           <img
             src={previewUrl}
-            className="max-h-60 rounded border border-gray-600"
+            className="mt-3 max-h-60 rounded border border-gray-600"
           />
         )}
 
