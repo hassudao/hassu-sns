@@ -14,6 +14,15 @@ type Tweet = {
   likes: number
   created_at: string
 }
+type Reply = {
+  id: string
+  tweet_id: string
+  user_id: string
+  user_name: string
+  content: string
+  created_at: string
+}
+
 
 export default function Home() {
   const [tweets, setTweets] = useState<Tweet[]>([])
@@ -25,6 +34,9 @@ export default function Home() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
+  const [replies, setReplies] = useState<Record<string, Reply[]>>({})
+　const [replyText, setReplyText] = useState<Record<string, string>>({})
+
 
   // 🔐 ログイン状態監視
   useEffect(() => {
@@ -121,6 +133,22 @@ export default function Home() {
     setUploading(false)
     fetchTweets()
   }
+  // ✍️ リプライ投稿
+const postReply = async (tweetId: string) => {
+  if (!user) return alert("ログインしてちょ😆")
+  if (!replyText[tweetId]?.trim()) return
+
+  await supabase.from("replies").insert({
+    tweet_id: tweetId,
+    user_id: user.id,
+    user_name: user.email,
+    content: replyText[tweetId],
+  })
+
+  setReplyText((prev) => ({ ...prev, [tweetId]: "" }))
+  fetchReplies(tweetId)
+}
+
 
   // ❤️ いいねON/OFF
   const likeTweet = async (tweetId: string) => {
@@ -152,6 +180,22 @@ export default function Home() {
     fetchTweets()
     fetchMyLikes()
   }
+  // 💬 リプライ取得
+const fetchReplies = async (tweetId: string) => {
+  const { data } = await supabase
+    .from("replies")
+    .select("*")
+    .eq("tweet_id", tweetId)
+    .order("created_at", { ascending: true })
+
+  if (data) {
+    setReplies((prev) => ({
+      ...prev,
+      [tweetId]: data,
+    }))
+  }
+}
+
 
   // 🗑️ 削除
   const deleteTweet = async (tweetId: string) => {
@@ -280,6 +324,39 @@ export default function Home() {
 
               <span>・{timeAgo(tweet.created_at)}</span>
             </div>
+            <div className="ml-4 mt-2 space-y-1 text-sm">
+  {replies[tweet.id]?.map((reply) => (
+    <div key={reply.id} className="text-gray-300">
+      <span className="text-green-400">@{reply.user_name}</span>{" "}
+      {reply.content}
+      <div className="text-xs text-gray-500">
+        {timeAgo(reply.created_at)}
+      </div>
+    </div>
+  ))}
+</div>
+{user && (
+  <div className="ml-4 mt-2 flex gap-2">
+    <input
+      className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-sm"
+      placeholder="リプライする…"
+      value={replyText[tweet.id] ?? ""}
+      onChange={(e) =>
+        setReplyText((prev) => ({
+          ...prev,
+          [tweet.id]: e.target.value,
+        }))
+      }
+    />
+    <button
+      onClick={() => postReply(tweet.id)}
+      className="text-blue-400 text-sm"
+    >
+      送信
+    </button>
+  </div>
+)}
+
           </div>
         ))}
       </div>
