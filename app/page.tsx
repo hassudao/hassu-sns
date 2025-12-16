@@ -151,11 +151,6 @@ const postReply = async (tweetId: string) => {
   setReplyText((prev) => ({ ...prev, [tweetId]: "" }))
   fetchReplies(tweetId)
 
-  if (data) {
-  setTweets(data)
-  data.forEach((tweet) => fetchReplyCount(tweet.id))
-}
-
 }
   // 💬 リプライ数取得
 const fetchReplyCount = async (tweetId: string) => {
