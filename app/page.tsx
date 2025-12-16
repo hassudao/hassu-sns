@@ -18,12 +18,11 @@ export default function Home() {
   const [text, setText] = useState("")
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [user, setUser] = useState<User | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   // 🔐 ログイン状態監視
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user)
-    })
+    supabase.auth.getUser().then(({ data }) => setUser(data.user))
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => setUser(session?.user ?? null)
@@ -55,26 +54,28 @@ export default function Home() {
     if (imageFile) {
       const fileExt = imageFile.name.split(".").pop()
       const fileName = `${Date.now()}.${fileExt}`
+
       const { error: uploadError } = await supabase.storage
-        .from("tweet-images") // バケット名
+        .from("tweet-images")
         .upload(fileName, imageFile)
 
       if (uploadError) {
-        alert("画像アップロード失敗💦")
+        setUploadError("画像アップロード失敗💦")
         console.error(uploadError)
         return
+      } else {
+        setUploadError(null)
+        const { data } = supabase.storage
+          .from("tweet-images")
+          .getPublicUrl(fileName)
+        image_url = data.publicUrl
       }
-
-      // 公開URL取得
-      image_url = supabase.storage
-        .from("tweet-images")
-        .getPublicUrl(fileName).data.publicUrl
     }
 
     const { error } = await supabase.from("tweets").insert({
       user_name: user.email,
       content: text,
-      image_url: image_url,
+      image_url,
     })
 
     if (error) {
@@ -138,13 +139,20 @@ export default function Home() {
       )}
 
       {/* ✍️ 投稿フォーム */}
-      <div className="p-4 border-b border-gray-700">
+      <div className="p-4 border-b border-gray-700 space-y-2">
+        <label className="block text-sm font-semibold mb-1">
+          画像を選択（任意）
+        </label>
         <input
           type="file"
           accept="image/*"
           onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-          className="w-full mb-2 text-black"
+          className="w-full p-2 bg-gray-800 text-white rounded"
         />
+
+        {uploadError && (
+          <div className="text-red-500 text-sm">{uploadError}</div>
+        )}
 
         <textarea
           className="w-full bg-black border border-gray-600 p-2 rounded"
@@ -171,7 +179,7 @@ export default function Home() {
             {tweet.image_url && (
               <img
                 src={tweet.image_url}
-                className="mt-2 rounded max-h-60"
+                className="mt-2 rounded max-h-60 w-full object-contain"
               />
             )}
 
